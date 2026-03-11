@@ -1,6 +1,10 @@
-# مخرجات السكريبت
-output/
-*.epub
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
 
 # Python
 __pycache__/
