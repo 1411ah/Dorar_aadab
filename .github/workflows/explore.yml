@@ -1,0 +1,41 @@
+name: Explore dorar/aadab
+
+on:
+  workflow_dispatch:
+    inputs:
+      sample:
+        description: "عدد الصفحات (0 = كامل)"
+        required: false
+        default: "30"
+
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run exploration
+        env:
+          SAMPLE: ${{ github.event.inputs.sample }}
+        run: python explore_aadab.py
+
+      - name: Push results to repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add exploration_report.txt sampled_pages.json
+          git diff --cached --quiet || git commit -m "results: exploration $(date +'%Y-%m-%d %H:%M')"
+          git push
