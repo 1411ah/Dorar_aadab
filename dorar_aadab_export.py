@@ -128,6 +128,10 @@ def safe_name(s: str, maxlen: int = 80) -> str:
 
 # ── Discovery ─────────────────────────────────────────────────────────────────
 def discover_urls() -> list[str]:
+    """
+    المصدر الأساسي: قائمة المعرّفات من الفهرس (موثوقة وكاملة).
+    لا نعتمد على سلسلة التالي/السابق لأنها تتوقف عند أي فشل.
+    """
     print(f"  جلب فهرس الروابط من {START_URL}…")
     index_soup = fetch(START_URL)
     all_ids: set[int] = set()
@@ -136,36 +140,21 @@ def discover_urls() -> list[str]:
             m = PAGE_RE.search(a["href"])
             if m:
                 all_ids.add(int(m.group(1)))
+
     if not all_ids:
         print("  [تحذير] لم يُعثر على روابط في صفحة الفهرس")
         return []
 
+    ids_sorted = sorted(all_ids)
+    print(f"  عدد المعرّفات المكتشفة: {len(ids_sorted)}"
+          f"  (المدى: {ids_sorted[0]} → {ids_sorted[-1]})")
+
+    if TEST_PAGES:
+        ids_sorted = ids_sorted[:TEST_PAGES]
+        print(f"  وضع الاختبار: أول {TEST_PAGES} معرّفات فقط")
+
     base = "https://dorar.net"
-    url  = f"{base}/aadab/{min(all_ids)}"
-    urls, seen = [], set()
-
-    while url:
-        if url in seen:
-            break
-        seen.add(url)
-        urls.append(url)
-        print(f"  [{len(urls):>4}] {url}")
-        if TEST_PAGES and len(urls) >= TEST_PAGES:
-            break
-        time.sleep(DELAY)
-        soup = fetch(url)
-        if not soup:
-            break
-        url = _next_url(soup, url)
-
-    return urls
-
-
-def _next_url(soup: BeautifulSoup, current: str) -> str | None:
-    for a in soup.find_all("a", href=True):
-        if PAGE_RE.search(a["href"]) and a.get_text(strip=True) == "التالي":
-            return urljoin(current, a["href"])
-    return None
+    return [f"{base}/aadab/{pid}" for pid in ids_sorted]
 
 
 # ── Parsing ───────────────────────────────────────────────────────────────────
@@ -399,14 +388,18 @@ def _extract_refs_content(soup: BeautifulSoup) -> str:
 # ── Scrape All ────────────────────────────────────────────────────────────────
 def scrape_all() -> list[Page]:
     urls = discover_urls()
-    print(f"\n{len(urls)} pages found. Parsing content…\n")
-    pages: list[Page] = []
+    total = len(urls)
+    print(f"\n{total} pages found. Parsing content…\n")
+    pages:  list[Page] = []
+    failed: list[str]  = []
 
     for i, url in enumerate(urls, 1):
         pid  = f"{i:05d}"
-        print(f"  parse {pid}: {url}")
+        print(f"  parse [{i:>4}/{total}] {url}")
         soup = fetch(url)
         if not soup:
+            failed.append(url)
+            time.sleep(DELAY * 3)   # انتظر أطول عند الفشل
             continue
         time.sleep(DELAY)
 
@@ -420,6 +413,11 @@ def scrape_all() -> list[Page]:
 
         body_html, footnotes = extract_content(soup, pid)
         pages.append(Page(pid, url, title, level, bc, body_html, footnotes))
+
+    if failed:
+        print(f"\n  ⚠ فشل جلب {len(failed)} صفحة:")
+        for u in failed:
+            print(f"    {u}")
 
     return pages
 
